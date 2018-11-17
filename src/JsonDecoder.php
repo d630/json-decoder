@@ -39,15 +39,44 @@ class JsonDecoder
 
     public function decode(string $json, string $classType)
     {
-        return $this->decodeArray(json_decode($json, true), $classType);
+        $data = json_decode($json, true);
+
+        if (json_last_error()) {
+            throw new \RuntimeException('JSON decoding error: ' . json_last_error_msg(), 400);
+        }
+
+        if (\count($data) === 0) {
+            throw new \RuntimeException('JSON decoding error: empty body', 404);
+        }
+
+        if (array_key_exists(0, $data)) {
+            throw new \RuntimeException('JSON decoding error: no raw JSON object in body', 404);
+        }
+
+        return $this->decodeArray($data, $classType);
     }
 
     public function decodeMultiple(string $json, string $classType)
     {
         $data = json_decode($json, true);
 
+        if (json_last_error()) {
+            throw new \RuntimeException('JSON decoding error: ' . json_last_error_msg(), 400);
+        }
+
+        if (\count($data) === 0) {
+            throw new \RuntimeException('JSON decoding error: empty body', 404);
+        }
+
+        if (!array_key_exists(0, $data)) {
+            throw new \RuntimeException('JSON decoding error: no properly-formed JSON array in body', 404);
+        }
+
         return array_map(
             function ($element) use ($classType) {
+                if (\count($element) === 0) {
+                    throw new \RuntimeException('JSON decoding error: empty object in JSON array', 404);
+                }
                 return $this->decodeArray($element, $classType);
             },
             $data
@@ -67,12 +96,10 @@ class JsonDecoder
         $instance = new $classType();
 
         if (array_key_exists($classType, $this->transformers)) {
-            $instance = $this->transform($this->transformers[$classType], $jsonArrayData, $instance);
+            return $this->transform($this->transformers[$classType], $jsonArrayData, $instance);
         } else {
-            $instance = $this->transformRaw($jsonArrayData, $instance);
+            return $this->transformRaw($jsonArrayData, $instance);
         }
-
-        return $instance;
     }
 
     public function decodesPrivateProperties()
@@ -87,9 +114,9 @@ class JsonDecoder
 
     private function transform($transformer, $jsonArrayData, $instance)
     {
-        if (empty($jsonArrayData)) {
-            return null;
-        }
+        // if (empty($jsonArrayData)) {
+        //     return null;
+        // }
 
         $classBindings = new ClassBindings($this);
         $transformer->register($classBindings);
@@ -99,9 +126,9 @@ class JsonDecoder
 
     protected function transformRaw($jsonArrayData, $instance)
     {
-        if (empty($jsonArrayData)) {
-            return null;
-        }
+        // if (empty($jsonArrayData)) {
+        //     return null;
+        // }
 
         $classBindings = new ClassBindings($this);
 
